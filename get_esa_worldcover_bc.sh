@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euxo pipefail
 
+# create data folder if not present
+mkdir -p data
+
 # Download BC tiles of ESA world landcover from S3 bucket
 aws s3 cp s3://esa-worldcover/v100/2020/map/ESA_WorldCover_10m_2020_v100_N54W123_Map.tif data/ESA_WorldCover_10m_2020_v100_N54W123_Map.tif
 aws s3 cp s3://esa-worldcover/v100/2020/map/ESA_WorldCover_10m_2020_v100_N57W120_Map.tif data/ESA_WorldCover_10m_2020_v100_N57W120_Map.tif
