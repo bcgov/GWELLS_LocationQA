@@ -196,13 +196,15 @@ def get_gwells(outfile=os.path.join("data", "wells.csv")):
             for text_file in zip_file.infolist()
             if text_file.filename.endswith(".csv")
         }
-        # only retain records with coordinates
-        df = dfs["well.csv"].dropna(subset=["latitude_Decdeg", "longitude_Decdeg"])
+        # keep  records that dont have coordinates
+        # df = dfs["well.csv"].dropna(subset=["latitude_Decdeg", "longitude_Decdeg"])
+        df = dfs["well.csv"]
         # only retain records that are unlicensed
         # (we presume locations of licensed wells are correct)
         # df = df[df["licenced_status_code"] == "UNLICENSED"]
 
         # save as intermediate file
+        
         df.to_csv(outfile, index=False)
         return df
 
@@ -424,6 +426,9 @@ def geocode(geocoder_api_key, out_file, verbose, quiet):
         # get wells csv as pandas dataframe
         df = get_gwells(os.path.join("data", "wells.csv"))
 
+        # drop wells that dont have lat/lon
+        df = df.dropna(subset=["latitude_Decdeg", "longitude_Decdeg"])
+
         # extract just id and coords
         well_locations = df[
             ["well_tag_number", "longitude_Decdeg", "latitude_Decdeg"]
@@ -466,6 +471,8 @@ def qa(verbose, quiet):
 
     # create a copy
     wells_copy = gwells_df.copy()
+
+    
     wells = gpd.GeoDataFrame(
         wells_copy,
         geometry=gpd.points_from_xy(
@@ -519,6 +526,9 @@ def qa(verbose, quiet):
             "distance",
         ]
     ].rename(columns={"distance": "distance_geocode"})
+    
+
+
     # convert tag and distance_geocode to integer
     geocode_df["well_tag_number"] = geocode_df["well_tag_number"].astype(int)
     geocode_df["distance_geocode"] = geocode_df["distance_geocode"].astype(int)
