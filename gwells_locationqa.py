@@ -196,15 +196,13 @@ def get_gwells(outfile=os.path.join("data", "wells.csv")):
             for text_file in zip_file.infolist()
             if text_file.filename.endswith(".csv")
         }
-        # keep  records that dont have coordinates
-        # df = dfs["well.csv"].dropna(subset=["latitude_Decdeg", "longitude_Decdeg"])
-        df = dfs["well.csv"]
+        # only retain records with coordinates
+        df = dfs["well.csv"].dropna(subset=["latitude_Decdeg", "longitude_Decdeg"])
         # only retain records that are unlicensed
         # (we presume locations of licensed wells are correct)
         # df = df[df["licenced_status_code"] == "UNLICENSED"]
 
         # save as intermediate file
-        
         df.to_csv(outfile, index=False)
         return df
 
@@ -426,9 +424,6 @@ def geocode(geocoder_api_key, out_file, verbose, quiet):
         # get wells csv as pandas dataframe
         df = get_gwells(os.path.join("data", "wells.csv"))
 
-        # drop wells that dont have lat/lon
-        df = df.dropna(subset=["latitude_Decdeg", "longitude_Decdeg"])
-
         # extract just id and coords
         well_locations = df[
             ["well_tag_number", "longitude_Decdeg", "latitude_Decdeg"]
@@ -466,13 +461,47 @@ def qa(verbose, quiet):
     verbosity = verbose - quiet
     configure_logging(verbosity)
 
-    # load source wells data
+    # load source wells data and check we have at least one row
     gwells_df = get_gwells()
+
+    if len(gwells_df.index)==0:
+        LOG.info("No wells in wells.csv required QA, exiting")
+        return
+    LOG.info(str(len(gwells_df.index)) + " wells in wells.csv require QA")
+
+    # # load geocode results as string, retain only columns of interest and check we have at least one row
+    geocode_df = pd.read_csv(os.path.join("data", "wells_geocoded.csv"), dtype=str)[
+        [
+            "well_tag_number",
+            "fullAddress",
+            "civicNumber",
+            "civicNumberSuffix",
+            "streetName",
+            "streetType",
+            "isStreetTypePrefix",
+            "streetDirection",
+            "isStreetDirectionPrefix",
+            "streetQualifier",
+            "localityName",
+            "distance",
+        ]
+    ].rename(columns={"distance": "distance_geocode"})
+    # convert tag and distance_geocode to integer
+    geocode_df["well_tag_number"] = geocode_df["well_tag_number"].astype(int)
+    geocode_df["distance_geocode"] = geocode_df["distance_geocode"].astype(int)
+    if len(geocode_df.index)==0:
+        LOG.info("No wells in wells_geocoded.csv required QA, exiting")
+        return
+    LOG.info(str(len(geocode_df.index)) + " wells in wells_geocoded.csv require QA")
+    
+    inner_joined_gwells_df_geocode_df = pd.merge(gwells_df, geocode_df, "inner", on="well_tag_number")
+    if len(inner_joined_gwells_df_geocode_df.index)==0:
+        LOG.info("No wells in BOTH wells.csv and  wells_geocoded.csv required QA, exiting")
+        return
+    LOG.info(str(len(inner_joined_gwells_df_geocode_df.index)) + " wells in both wells.csv and wells_geocoded require QA, processing")
 
     # create a copy
     wells_copy = gwells_df.copy()
-
-    
     wells = gpd.GeoDataFrame(
         wells_copy,
         geometry=gpd.points_from_xy(
@@ -508,30 +537,6 @@ def qa(verbose, quiet):
     )
     # overlay with wells
     wells_nrd = gpd.sjoin(wells, nrd, how="left", predicate="within")
-
-    # load geocode results as string, retain only columns of interest
-    geocode_df = pd.read_csv(os.path.join("data", "wells_geocoded.csv"), dtype=str)[
-        [
-            "well_tag_number",
-            "fullAddress",
-            "civicNumber",
-            "civicNumberSuffix",
-            "streetName",
-            "streetType",
-            "isStreetTypePrefix",
-            "streetDirection",
-            "isStreetDirectionPrefix",
-            "streetQualifier",
-            "localityName",
-            "distance",
-        ]
-    ].rename(columns={"distance": "distance_geocode"})
-    
-
-
-    # convert tag and distance_geocode to integer
-    geocode_df["well_tag_number"] = geocode_df["well_tag_number"].astype(int)
-    geocode_df["distance_geocode"] = geocode_df["distance_geocode"].astype(int)
 
     # combine wells and geocode results
     wells_nrd_geocoded = pd.merge(wells_nrd, geocode_df, "inner", on="well_tag_number")
