@@ -641,6 +641,7 @@ def qa(verbose, quiet):
     # search for exact matches of several permutations to catch most)
     out_df["xref_ind"] = (
         out_df["comments"]
+        .astype(str)        
         .str.upper()
         .fillna("")
         .str.contains("CROSS R|CROSS-R|REF'D|REFERENCED|REFD|XREF|X-R|X R")
